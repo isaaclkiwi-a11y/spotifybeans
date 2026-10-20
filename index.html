@@ -1,0 +1,85 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Focusify</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 40px 20px;
+      background: #121212;
+      color: white;
+      font: 16px Arial, sans-serif;
+    }
+    main { max-width: 700px; margin: auto; }
+    h1 { font-size: 48px; }
+    p { color: #bbb; }
+    input {
+      box-sizing: border-box;
+      width: 70%;
+      padding: 14px;
+      border-radius: 24px;
+      border: 0;
+      background: #282828;
+      color: white;
+    }
+    button {
+      padding: 14px 20px;
+      border: 0;
+      border-radius: 24px;
+      background: #1ed760;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    a { color: #1ed760; }
+    .card {
+      display: block;
+      margin: 12px 0;
+      padding: 20px;
+      border-radius: 12px;
+      background: #242424;
+      color: white;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Focusify 🎧</h1>
+    <p>Your soundtrack for getting things done.</p>
+
+    <form id="search">
+      <input id="q" placeholder="Search songs, artists, playlists..."
+             aria-label="Search Spotify">
+      <button>Search</button>
+    </form>
+
+    <h2>Quick starts</h2>
+    <a class="card" href="https://open.spotify.com/search/lofi%20beats">
+      ☁️ Lo-fi beats
+    </a>
+    <a class="card" href="https://open.spotify.com/search/instrumental%20study">
+      📚 Instrumental study music
+    </a>
+    <a class="card" href="https://open.spotify.com/search/rain%20sounds">
+      🌧️ Rain sounds
+    </a>
+    <p>Spotify handles search and playback on its own website.</p>
+  </main>
+
+  <script>
+    document.getElementById("search").addEventListener("submit", e => {
+      e.preventDefault();
+      const q = document.getElementById("q").value.trim();
+      if (q) {
+        window.open(
+          "https://open.spotify.com/search/" +
+          encodeURIComponent(q), "_blank", "noopener"
+        );
+      }
+    });
+  </script>
+</body>
+</html>
