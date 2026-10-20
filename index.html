@@ -1,38 +1,91 @@
 
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Focusify</title>
+  <meta name="theme-color" content="#121212">
+  <title>Focusify 🎧</title>
   <style>
+    * { box-sizing: border-box; }
     body {
-      margin: 0; padding: 40px 20px;
-      background: #121212; color: white;
-      font: 16px Arial, sans-serif;
+      margin: 0;
+      padding: 32px 18px 70px;
+      background: #121212;
+      color: #fff;
+      font-family: Arial, sans-serif;
     }
-    main { max-width: 760px; margin: auto; }
-    h1 { font-size: 44px; }
-    p { color: #bbb; }
-    input {
-      box-sizing: border-box; width: 70%; padding: 14px;
-      border-radius: 24px; border: 0;
-      background: #282828; color: white;
-    }
+    main { max-width: 780px; margin: auto; }
+    h1 { font-size: 44px; margin-bottom: 8px; }
+    p { color: #b3b3b3; line-height: 1.5; }
+    button, input { font: inherit; }
     button {
-      padding: 14px 20px; border: 0; border-radius: 24px;
-      background: #1ed760; color: #111;
-      font-weight: bold; cursor: pointer; margin: 5px;
+      border: 0;
+      border-radius: 24px;
+      padding: 12px 19px;
+      background: #1ed760;
+      color: #111;
+      font-weight: bold;
+      cursor: pointer;
+      margin: 4px 5px 4px 0;
     }
-    .card {
-      display: flex; align-items: center; gap: 14px;
-      margin: 12px 0; padding: 14px;
-      border-radius: 12px; background: #242424;
-      color: white; text-decoration: none;
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .secondary { background: #333; color: #fff; }
+    input[type="text"], input[type="search"] {
+      width: 100%;
+      min-width: 0;
+      padding: 14px 17px;
+      background: #282828;
+      color: #fff;
+      border: 1px solid #444;
+      border-radius: 24px;
+      outline-color: #1ed760;
     }
-    .card img { width: 64px; height: 64px; object-fit: cover; }
-    .muted { color: #bbb; font-size: 14px; }
+    form { display: flex; gap: 8px; margin: 24px 0 16px; }
+    form input { flex: 1; }
     #status { overflow-wrap: anywhere; }
+    .panel {
+      background: #202020;
+      border: 1px solid #333;
+      border-radius: 16px;
+      padding: 18px;
+      margin: 24px 0;
+    }
+    .eyebrow {
+      color: #1ed760;
+      font-size: 12px;
+      font-weight: bold;
+      letter-spacing: 2px;
+    }
+    #nowPlaying { font-weight: bold; font-size: 19px; }
+    #progress { width: 100%; accent-color: #1ed760; }
+    .results { display: grid; gap: 10px; }
+    .track {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      background: #242424;
+      padding: 12px;
+      border-radius: 12px;
+    }
+    .track img {
+      width: 68px;
+      height: 68px;
+      object-fit: cover;
+      border-radius: 6px;
+      flex-shrink: 0;
+    }
+    .track-info { min-width: 0; flex: 1; }
+    .track-title { font-weight: bold; overflow-wrap: anywhere; }
+    .track-artist { font-size: 14px; margin: 5px 0; }
+    .track a { color: #1ed760; font-size: 13px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 5px; }
+    .hint { font-size: 13px; }
+    @media (max-width: 520px) {
+      h1 { font-size: 36px; }
+      form { flex-wrap: wrap; }
+      form input { flex-basis: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -41,222 +94,502 @@
   <p>Your soundtrack for getting things done.</p>
 
   <button id="login">Connect Spotify</button>
-  <button id="logout">Disconnect</button>
-  <p id="status">Connect your Spotify account to start searching.</p>
+  <button id="logout" class="secondary">Disconnect</button>
+  <p id="status" role="status" aria-live="polite">
+    Connect your Spotify Premium account to begin.
+  </p>
 
-  <form id="search">
-    <input id="q" placeholder="Search songs, artists, albums..."
-      aria-label="Search Spotify" required>
-    <button>Search</button>
+  <section class="panel">
+    <div class="eyebrow">NOW PLAYING</div>
+    <p id="nowPlaying">Nothing playing yet</p>
+    <p id="artistPlaying">Your next focus soundtrack goes here.</p>
+    <input id="progress" type="range" min="0" max="1000" value="0"
+      aria-label="Song progress">
+    <div class="controls">
+      <button id="previous" class="secondary" disabled>⏮ Previous</button>
+      <button id="toggle" disabled>▶ Play / Pause</button>
+      <button id="next" class="secondary" disabled>Next ⏭</button>
+    </div>
+  </section>
+
+  <h2>Find your focus music</h2>
+  <form id="searchForm">
+    <input id="searchQuery" type="search"
+      placeholder="Search songs or artists..." required>
+    <button id="searchButton">Search</button>
   </form>
-
-  <section id="results"></section>
+  <section id="results" class="results"></section>
+  <p class="hint">
+    Playback requires Spotify Premium and access to Spotify's playback
+    services. If your network blocks those services, the player may not connect.
+  </p>
 </main>
 
 <script>
-const CLIENT_ID = "d32651b90a3843b3af08ef5348d75b4a";
-const REDIRECT_URI = "https://spotify-pink-iota.vercel.app/callback";
-const AUTH = "https://accounts.spotify.com";
-const $ = id => document.getElementById(id);
+(() => {
+  "use strict";
 
-function randomString(length = 64) {
-  const bytes = crypto.getRandomValues(new Uint8Array(length));
-  return Array.from(bytes, b =>
-    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"[b % 62]
-  ).join("");
-}
+  // Paste your Spotify Client ID here. Never use your Client Secret.
+  const CLIENT_ID = "d32651b90a3843b3af08ef5348d75b4a";
+  const REDIRECT_URI = "https://spotify-pink-iota.vercel.app/callback";
+  const AUTH_URL = "https://accounts.spotify.com";
 
-async function challenge(verifier) {
-  const digest = await crypto.subtle.digest(
-    "SHA-256", new TextEncoder().encode(verifier)
-  );
-  return btoa(String.fromCharCode(...new Uint8Array(digest)))
-    .replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
-}
+  const SCOPES = [
+    "streaming",
+    "user-read-email",
+    "user-read-private",
+    "user-modify-playback-state",
+    "user-read-playback-state",
+    "user-read-currently-playing"
+  ].join(" ");
 
-function setStatus(message) {
-  $("status").textContent = message;
-}
+  const $ = id => document.getElementById(id);
 
-async function login() {
-  const verifier = randomString();
-  const state = randomString(32);
-  sessionStorage.setItem("pkce_verifier", verifier);
-  sessionStorage.setItem("oauth_state", state);
+  let player = null;
+  let deviceId = null;
+  let sdkReady = false;
+  let playerConnecting = false;
+  let durationMs = 0;
+  let seekPending = false;
 
-  const params = new URLSearchParams({
-    client_id: CLIENT_ID,
-    response_type: "code",
-    redirect_uri: REDIRECT_URI,
-    code_challenge_method: "S256",
-    code_challenge: await challenge(verifier),
-    state
-  });
-
-  location.href = `${AUTH}/authorize?${params}`;
-}
-
-async function exchangeCode(code) {
-  const verifier = sessionStorage.getItem("pkce_verifier");
-  const expectedState = sessionStorage.getItem("oauth_state");
-  const returnedState = new URLSearchParams(location.search).get("state");
-
-  if (!verifier || !expectedState || returnedState !== expectedState) {
-    throw new Error("Login verification failed. Please try connecting again.");
+  function status(message) {
+    $("status").textContent = message;
   }
 
-  const response = await fetch(`${AUTH}/api/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: CLIENT_ID,
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: REDIRECT_URI,
-      code_verifier: verifier
-    })
-  });
-
-  const data = await response.json();
-  if (!response.ok) throw new Error(data.error_description || data.error);
-
-  saveTokens(data);
-  sessionStorage.removeItem("pkce_verifier");
-  sessionStorage.removeItem("oauth_state");
-  history.replaceState({}, "", "/");
-}
-
-function saveTokens(data) {
-  localStorage.setItem("spotify_access_token", data.access_token);
-  localStorage.setItem("spotify_expires_at",
-    String(Date.now() + data.expires_in * 1000));
-  if (data.refresh_token) {
-    localStorage.setItem("spotify_refresh_token", data.refresh_token);
-  }
-}
-
-async function getToken() {
-  let token = localStorage.getItem("spotify_access_token");
-  const expires = Number(localStorage.getItem("spotify_expires_at") || 0);
-
-  if (token && Date.now() < expires - 60000) return token;
-
-  const refresh = localStorage.getItem("spotify_refresh_token");
-  if (!refresh) throw new Error("Please connect Spotify again.");
-
-  const response = await fetch(`${AUTH}/api/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: CLIENT_ID,
-      grant_type: "refresh_token",
-      refresh_token: refresh
-    })
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error("Session expired. Please connect Spotify again.");
-  }
-  saveTokens(data);
-  return data.access_token;
-}
-
-async function searchSpotify(query) {
-  const token = await getToken();
-  const params = new URLSearchParams({
-    q: query, type: "track", limit: "10"
-  });
-
-  const response = await fetch(
-    `https://api.spotify.com/v1/search?${params}`,
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error?.message || "Spotify search failed.");
+  function randomString(length) {
+    const chars =
+      "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    const bytes = crypto.getRandomValues(new Uint8Array(length));
+    return Array.from(bytes, b => chars[b % chars.length]).join("");
   }
 
-  const results = $("results");
-  results.replaceChildren();
-
-  if (!data.tracks.items.length) {
-    results.textContent = "No tracks found. Try another search.";
-    return;
+  async function makeChallenge(verifier) {
+    const digest = await crypto.subtle.digest(
+      "SHA-256",
+      new TextEncoder().encode(verifier)
+    );
+    const bytes = Array.from(new Uint8Array(digest));
+    return btoa(String.fromCharCode(...bytes))
+      .replace(/=/g, "")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_");
   }
 
-  for (const track of data.tracks.items) {
-    const card = document.createElement("a");
-    card.className = "card";
-    card.href = track.external_urls.spotify;
-    card.target = "_blank";
-    card.rel = "noopener noreferrer";
-
-    const cover = document.createElement("img");
-    cover.alt = "";
-    cover.src = track.album.images.at(-1)?.url || "";
-
-    const details = document.createElement("div");
-    const title = document.createElement("strong");
-    title.textContent = track.name;
-    const artist = document.createElement("p");
-    artist.className = "muted";
-    artist.textContent = track.artists.map(a => a.name).join(", ");
-
-    details.append(title, artist);
-    card.append(cover, details);
-    results.append(card);
-  }
-}
-
-$("login").addEventListener("click", () =>
-  login().catch(e => setStatus(e.message))
-);
-
-$("logout").addEventListener("click", () => {
-  for (const key of [
-    "spotify_access_token", "spotify_expires_at", "spotify_refresh_token"
-  ]) localStorage.removeItem(key);
-  setStatus("Disconnected. Connect Spotify to search again.");
-  $("results").replaceChildren();
-});
-
-$("search").addEventListener("submit", async e => {
-  e.preventDefault();
-  const query = $("q").value.trim();
-  if (!query) return;
-  setStatus("Searching Spotify...");
-  try {
-    await searchSpotify(query);
-    setStatus("Search complete.");
-  } catch (error) {
-    setStatus(error.message);
-  }
-});
-
-(async () => {
-  const params = new URLSearchParams(location.search);
-  const code = params.get("code");
-  const error = params.get("error");
-
-  if (error) {
-    setStatus("Spotify login was cancelled or denied: " + error);
-    history.replaceState({}, "", "/");
-    return;
-  }
-
-  if (code) {
-    try {
-      setStatus("Finishing Spotify login...");
-      await exchangeCode(code);
-      setStatus("Spotify connected! Search for a song.");
-    } catch (e) {
-      setStatus(e.message);
+  async function connectSpotify() {
+    if (CLIENT_ID === "YOUR_SPOTIFY_CLIENT_ID" || !CLIENT_ID.trim()) {
+      throw new Error(
+        "Setup needed: replace YOUR_SPOTIFY_CLIENT_ID with your Spotify Client ID."
+      );
     }
-  } else if (localStorage.getItem("spotify_access_token")) {
-    setStatus("Spotify session found. Try searching!");
+
+    const verifier = randomString(64);
+    const state = randomString(32);
+
+    sessionStorage.setItem("focusify_verifier", verifier);
+    sessionStorage.setItem("focusify_state", state);
+
+    const challenge = await makeChallenge(verifier);
+    const params = new URLSearchParams({
+      client_id: CLIENT_ID,
+      response_type: "code",
+      redirect_uri: REDIRECT_URI,
+      code_challenge_method: "S256",
+      code_challenge: challenge,
+      state: state,
+      scope: SCOPES
+    });
+
+    location.assign(`${AUTH_URL}/authorize?${params}`);
   }
+
+  function saveTokenResponse(data) {
+    localStorage.setItem("focusify_access_token", data.access_token);
+    localStorage.setItem(
+      "focusify_expires_at",
+      String(Date.now() + data.expires_in * 1000)
+    );
+    if (data.refresh_token) {
+      localStorage.setItem("focusify_refresh_token", data.refresh_token);
+    }
+  }
+
+  async function finishLogin(code, returnedState) {
+    const verifier = sessionStorage.getItem("focusify_verifier");
+    const expectedState = sessionStorage.getItem("focusify_state");
+
+    if (!verifier || !expectedState || returnedState !== expectedState) {
+      throw new Error("Login verification failed. Please connect again.");
+    }
+
+    const response = await fetch(`${AUTH_URL}/api/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: CLIENT_ID,
+        grant_type: "authorization_code",
+        code,
+        redirect_uri: REDIRECT_URI,
+        code_verifier: verifier
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error_description || data.error ||
+        "Spotify could not finish logging you in.");
+    }
+
+    saveTokenResponse(data);
+    sessionStorage.removeItem("focusify_verifier");
+    sessionStorage.removeItem("focusify_state");
+    history.replaceState({}, "", "/");
+  }
+
+  async function getToken() {
+    const access = localStorage.getItem("focusify_access_token");
+    const expiresAt = Number(
+      localStorage.getItem("focusify_expires_at") || 0
+    );
+
+    if (access && Date.now() < expiresAt - 60000) return access;
+
+    const refresh = localStorage.getItem("focusify_refresh_token");
+    if (!refresh) throw new Error("Please connect Spotify again.");
+
+    const response = await fetch(`${AUTH_URL}/api/token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: CLIENT_ID,
+        grant_type: "refresh_token",
+        refresh_token: refresh
+      })
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error("Spotify session expired. Please connect again.");
+    }
+
+    saveTokenResponse(data);
+    return data.access_token;
+  }
+
+  async function spotifyRequest(url, options = {}) {
+    const token = await getToken();
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(options.headers || {})
+      }
+    });
+
+    if (!response.ok) {
+      let message = `Spotify error (${response.status}).`;
+      try {
+        const body = await response.json();
+        message = body.error?.message || message;
+      } catch {}
+      throw new Error(message);
+    }
+
+    if (response.status === 204) return null;
+    return response.json();
+  }
+
+  async function searchTracks(query) {
+    const params = new URLSearchParams({
+      q: query,
+      type: "track",
+      limit: "15"
+    });
+
+    const data = await spotifyRequest(
+      `https://api.spotify.com/v1/search?${params}`
+    );
+    const results = $("results");
+    results.replaceChildren();
+
+    if (!data.tracks.items.length) {
+      results.textContent = "No tracks found. Try another search.";
+      return;
+    }
+
+    data.tracks.items.forEach(track => {
+      const card = document.createElement("article");
+      card.className = "track";
+
+      const image = document.createElement("img");
+      image.alt = "";
+      image.src = track.album.images.at(-1)?.url || "";
+      image.loading = "lazy";
+
+      const info = document.createElement("div");
+      info.className = "track-info";
+
+      const title = document.createElement("div");
+      title.className = "track-title";
+      title.textContent = track.name;
+
+      const artist = document.createElement("p");
+      artist.className = "track-artist";
+      artist.textContent = track.artists.map(a => a.name).join(", ");
+
+      const play = document.createElement("button");
+      play.textContent = "▶ Play";
+      play.addEventListener("click", () => playTrack(track));
+
+      const link = document.createElement("a");
+      link.href = track.external_urls.spotify;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = "Open in Spotify";
+
+      info.append(title, artist, play, document.createTextNode(" "), link);
+      card.append(image, info);
+      results.append(card);
+    });
+  }
+
+  async function playTrack(track) {
+    if (!deviceId) {
+      status("The Focusify player is still connecting. Wait a moment and retry.");
+      return;
+    }
+
+    try {
+      status(`Starting "${track.name}"...`);
+      await spotifyRequest(
+        `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({ uris: [track.uri] })
+        }
+      );
+      status("Playback requested. Enjoy your focus music!");
+    } catch (error) {
+      status(error.message);
+    }
+  }
+
+  function setControls(enabled) {
+    ["previous", "toggle", "next"].forEach(id => {
+      $(id).disabled = !enabled;
+    });
+  }
+
+  function startPlayer() {
+    if (!sdkReady || player || playerConnecting ||
+        !localStorage.getItem("focusify_refresh_token")) return;
+
+    playerConnecting = true;
+
+    player = new Spotify.Player({
+      name: "Focusify Web Player",
+      volume: 0.5,
+      getOAuthToken: callback => {
+        getToken()
+          .then(callback)
+          .catch(error => status(error.message));
+      }
+    });
+
+    player.addListener("ready", ({ device_id }) => {
+      deviceId = device_id;
+      playerConnecting = false;
+      setControls(true);
+      status("Player connected! Search for a song and press Play.");
+    });
+
+    player.addListener("not_ready", () => {
+      deviceId = null;
+      setControls(false);
+      status("Player disconnected. Check your connection and refresh.");
+    });
+
+    player.addListener("player_state_changed", state => {
+      if (!state) return;
+
+      const track = state.track_window.current_track;
+      durationMs = state.duration;
+
+      $("nowPlaying").textContent = track.name;
+      $("artistPlaying").textContent =
+        track.artists.map(a => a.name).join(", ");
+      $("toggle").textContent = state.paused ? "▶ Play" : "⏸ Pause";
+
+      if (!seekPending) {
+        $("progress").value = durationMs
+          ? Math.round(state.position / durationMs * 1000)
+          : 0;
+      }
+    });
+
+    player.addListener("initialization_error", ({ message }) => {
+      playerConnecting = false;
+      status("Player setup failed: " + message);
+    });
+
+    player.addListener("authentication_error", ({ message }) => {
+      playerConnecting = false;
+      status("Spotify login error: " + message);
+    });
+
+    player.addListener("account_error", ({ message }) => {
+      playerConnecting = false;
+      status("Spotify account issue: " + message);
+    });
+
+    player.addListener("playback_error", ({ message }) => {
+      status("Playback failed: " + message);
+    });
+
+    player.addListener("autoplay_failed", () => {
+      status("Press Play to start audio in your browser.");
+    });
+
+    player.connect().then(connected => {
+      if (!connected) {
+        playerConnecting = false;
+        status("Could not connect. Check whether Spotify services are blocked.");
+      }
+    }).catch(error => {
+      playerConnecting = false;
+      status(error.message);
+    });
+  }
+
+  $("login").addEventListener("click", () => {
+    connectSpotify().catch(error => status(error.message));
+  });
+
+  $("logout").addEventListener("click", async () => {
+    if (player) {
+      await player.disconnect();
+      player = null;
+    }
+
+    playerConnecting = false;
+    deviceId = null;
+
+    [
+      "focusify_access_token",
+      "focusify_expires_at",
+      "focusify_refresh_token"
+    ].forEach(key => localStorage.removeItem(key));
+
+    $("results").replaceChildren();
+    $("nowPlaying").textContent = "Nothing playing yet";
+    $("artistPlaying").textContent = "Your next focus soundtrack goes here.";
+    $("progress").value = 0;
+    setControls(false);
+    status("Disconnected from Spotify.");
+  });
+
+  $("searchForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const query = $("searchQuery").value.trim();
+    if (!query) return;
+
+    $("searchButton").disabled = true;
+    status("Searching Spotify...");
+
+    try {
+      await searchTracks(query);
+      status("Search complete. Choose a track to play.");
+    } catch (error) {
+      status(error.message);
+    } finally {
+      $("searchButton").disabled = false;
+    }
+  });
+
+  $("toggle").addEventListener("click", async () => {
+    if (!player) return;
+    try {
+      await player.togglePlay();
+    } catch (error) {
+      status(error.message);
+    }
+  });
+
+  $("next").addEventListener("click", async () => {
+    if (!player) return;
+    try {
+      await player.nextTrack();
+    } catch (error) {
+      status(error.message);
+    }
+  });
+
+  $("previous").addEventListener("click", async () => {
+    if (!player) return;
+    try {
+      await player.previousTrack();
+    } catch (error) {
+      status(error.message);
+    }
+  });
+
+  $("progress").addEventListener("input", () => {
+    seekPending = true;
+  });
+
+  $("progress").addEventListener("change", async event => {
+    try {
+      if (!player || !durationMs) return;
+      const position = Math.round(
+        Number(event.target.value) / 1000 * durationMs
+      );
+      await player.seek(position);
+    } catch (error) {
+      status(error.message);
+    } finally {
+      seekPending = false;
+    }
+  });
+
+  // Register the callback BEFORE loading the Spotify SDK.
+  window.onSpotifyWebPlaybackSDKReady = () => {
+    sdkReady = true;
+    startPlayer();
+  };
+
+  const sdkScript = document.createElement("script");
+  sdkScript.src = "https://sdk.scdn.co/spotify-player.js";
+  sdkScript.async = true;
+  sdkScript.onerror = () => {
+    status("Spotify's player script could not load. Check network access.");
+  };
+  document.head.appendChild(sdkScript);
+
+  (async () => {
+    const params = new URLSearchParams(location.search);
+    const code = params.get("code");
+    const error = params.get("error");
+
+    if (error) {
+      status("Spotify login was cancelled or denied: " + error);
+      history.replaceState({}, "", "/");
+      return;
+    }
+
+    if (code) {
+      try {
+        status("Completing Spotify login...");
+        await finishLogin(code, params.get("state"));
+        status("Spotify connected. Starting your player...");
+        startPlayer();
+      } catch (e) {
+        status(e.message);
+      }
+    } else if (localStorage.getItem("focusify_refresh_token")) {
+      status("Restoring your Spotify session...");
+      startPlayer();
+    }
+  })();
 })();
 </script>
 </body>
